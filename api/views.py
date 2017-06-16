@@ -25,10 +25,24 @@ def recognitionView(request, format=None):
     keys = request.data.keys()
     if len(keys)<1:
 	return HttpResponse("Please selecting at least one segmented image.")
+    '''
+    # Only one file/value in each field
     for key in keys:
 	uploadedimage = request.data.get(key)
 	imagename = str(uploadedimage)
     	default_storage.save(dataDir+"/"+imagename, uploadedimage)
+    '''
+    # One or multiple files/values in one field
+    for key in keys:
+	uploadedimages = request.data.getlist(key)
+	print("######## %d" % len(uploadedimages))
+	if len(uploadedimages) == 1:
+	    image_str = str(uploadedimages[0])
+    	    default_storage.save(dataDir+"/"+image_str, uploadedimages[0])
+	elif len(uploadedimages) > 1:
+	    for image in uploadedimages:
+		image_str = str(image)
+		default_storage.save(dataDir+"/"+image_str, image)
 	
     # Call OCR recognition function
     alltext_file = recognition_exec(dataDir)
