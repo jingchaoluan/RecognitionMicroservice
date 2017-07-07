@@ -7,7 +7,6 @@ import codecs
 from pylab import *
 import os.path
 import ocrolib
-import argparse
 import matplotlib
 from multiprocessing import Pool
 from ocrolib import edist
@@ -27,26 +26,18 @@ modelPath = settings.BASE_DIR + "/models/en-default.pyrnn.gz"
 # Users can custom the first 11 parameters
 args = {
     # line dewarping (usually contained in model)
-    'nolineest':False,   # target line height (do not overrides recognizer)
-    'height':-1,        # target line height (do not overrides recognizer)
+    'height':-1,        # target line height (overrides recognizer)
 
     # recognition
     'model':modelPath,  # line recognition model
     'pad':16,           # extra blank padding to the left and right of text line
-    'nonormalize':False, # don't normalize the textual output from the recognizer, don't apply standard Unicode normalizations for OCR
-    'llocs':False,       # output LSTM locations for characters
-    'alocs':False,       # output aligned LSTM locations for characters
+    'nonormalize':False,# don't normalize the textual output from the recognizer, don't apply standard Unicode normalizations for OCR
+    'llocs':False,      # output LSTM locations for characters
     'probabilities':False,# output probabilities for each letter
-
-    # error measures
-    'estrate':False,     # estimate error rate only
-    'estconf':20,       # estimate confusion matrix
-    'compare':"nospace",# string comparison used for error rate estimate
-    'context':0,        # context for error reporting
 
     ### The following parameters cannot be overwritten by users
     'nocheck':True,     # disable error checking on images
-    'quiet':False,       # turn off most output
+    'quiet':False,      # turn off most output
     'parallel':0        # number of parallel processes to use
 }
 
@@ -55,8 +46,9 @@ args = {
 # Return the directories, each directory related to a input image and stored the segmented line images  
 def recognition_exec(images, parameters):
     args.update(parameters)
-    print("==========")
+    print("=====Parameters Values =====")
     print(args)
+    print("============================")
 
     if len(images)<1:
         sys.exit(0)
@@ -69,52 +61,21 @@ def recognition_exec(images, parameters):
     get_linenormalizer()
 
     # Call process to execute recognition
+    output_lists = []
     if args['parallel']==0:
-        results = []
         for trial,fname in enumerate(images):
-            results.append(process((trial,fname)))
+            line_output_list = process((trial,fname))
+            output_lists = output_lists + line_output_list
     elif args['parallel']==1:
-        results = []
         for trial,fname in enumerate(images):
-            results.append(safe_process((trial,fname)))
+            line_output_list = safe_process((trial,fname))
+            output_lists = output_lists + line_output_list
     else:
         pool = Pool(processes=args['parallel'])
-        results = []
-        for r  in pool.imap_unordered(safe_process,enumerate(images)):
-            result.append(r)
-            if not args['quiet'] and len(results)%100==0:
-                sys.stderr.write("==== %d of %d\n"%(len(results),len(images)))
-
-    results = [x for x in results if x is not None]
-
-    # Caculate error rate
-    confusions = []
-    if args['estrate']:
-        terr = 0
-        total = 0
-        for err,conf,n,trial,fname, in results:
-            terr += err
-            total += n
-            confusions += conf
-        print_info("%.5f %d %d %s" % (terr*1.0/total, terr, total, args['model']))
-        if args['estconf']>0:
-            print_info("top %d confusions (count pred gt), comparison: %s" % (
-                args['estconf'], args['compare']))
-            for ((u,v),n) in Counter(confusions).most_common(args['estconf']):
-                print_info("%6d %-4s %-4s" % (n, u ,v))
-
-    '''
-    # Write all of the line results into a single file
-    all_in_one_result = dataDir + "/recog_output.txt"
-    with open(all_in_one_result, "wb") as outfile:
-        for result in results:
-            with open(result, "rb") as infile:
-                outfile.write(infile.read())
-                infile.close()
-    outfile.close()
-    return all_in_one_result
-    '''
-
+        result = pool.imap_unordered(safe_process,enumerate(images))
+        for line_output_list in result:
+            output_lists = output_lists + line_output_list
+    return output_lists
 
 
 def print_info(*objs):
@@ -170,6 +131,7 @@ def get_linenormalizer():
 
 # process one image
 def process(arg):
+    output_list = []
     (trial,fname) = arg
     base,_ = ocrolib.allsplitext(fname)
     line = ocrolib.read_image_gray(fname)
@@ -183,14 +145,10 @@ def process(arg):
             print_error("%s SKIPPED %s (use -n to disable this check)" % (fname, check))
             return (0,[],0,trial,fname)
 
-    if not args['nolineest']:
-        assert "dew.png" not in fname,"don't dewarp dewarped images"
-        temp = amax(line)-line
-        temp = temp*1.0/amax(temp)
-        lnorm.measure(temp)
-        line = lnorm.normalize(line,cval=amax(line))
-    else:
-        assert "dew.png" in fname,"only apply to dewarped images"
+    temp = amax(line)-line
+    temp = temp*1.0/amax(temp)
+    lnorm.measure(temp)
+    line = lnorm.normalize(line,cval=amax(line))
 
     line = lstm.prepare_line(line,args['pad'])
     pred = network.predictString(line)
@@ -199,62 +157,36 @@ def process(arg):
         # output recognized LSTM locations of characters
         result = lstm.translate_back(network.outputs,pos=1)
         scale = len(raw_line.T)*1.0/(len(network.outputs)-2*args['pad'])
-        #ion(); imshow(raw_line,cmap=cm.gray)
-        with codecs.open(base+".llocs","w","utf-8") as locs:
+        output_llocs = base+".llocs"
+        with codecs.open(output_llocs,"w","utf-8") as locs:
             for r,c in result:
                 c = network.l2s([c])
                 r = (r-args['pad'])*scale
                 locs.write("%s\t%.1f\n"%(c,r))
+            output_list.append(output_llocs)
                 #plot([r,r],[0,20],'r' if c==" " else 'b')
         #ginput(1,1000)
-
-    if args['alocs']:
-        # output recognized and aligned LSTM locations
-        if os.path.exists(base+".gt.txt"):
-            transcript = ocrolib.read_text(base+".gt.txt")
-            transcript = ocrolib.normalize_text(transcript)
-            network.trainString(line,transcript,update=0)
-            result = lstm.translate_back(network.aligned,pos=1)
-            scale = len(raw_line.T)*1.0/(len(network.aligned)-2*args['pad'])
-            with codecs.open(base+".alocs","w","utf-8") as locs:
-                for r,c in result:
-                    c = network.l2s([c])
-                    r = (r-args['pad'])*scale
-                    locs.write("%s\t%.1f\n"%(c,r))
 
     if args['probabilities']:
         # output character probabilities
         result = lstm.translate_back(network.outputs,pos=2)
-        with codecs.open(base+".prob","w","utf-8") as file:
+        output_prob = base+".prob"
+        with codecs.open(output_prob,"w","utf-8") as file:
             for c,p in result:
                 c = network.l2s([c])
                 file.write("%s\t%s\n"%(c,p))
+            output_list.append(output_prob)
 
     if not args['nonormalize']:
         pred = ocrolib.normalize_text(pred)
 
-    if args['estrate']:
-        try:
-            gt = ocrolib.read_text(base+".gt.txt")
-        except:
-            return (0,[],0,trial,fname)
-        pred0 = ocrolib.project_text(pred,args['compare'])
-        gt0 = ocrolib.project_text(gt,args['compare'])
-        if args['estconf']>0:
-            err,conf = edist.xlevenshtein(pred0,gt0,context=args['context'])
-        else:
-            err = edist.xlevenshtein(pred0,gt0)
-            conf = []
-        if not args['quiet']:
-            print_info("%3d %3d %s:%s" % (err, len(gt), fname, pred))
-            sys.stdout.flush()
-        return (err,conf,len(gt0),trial,fname)
-
     if not args['quiet']:
         print_info(fname+":"+pred)
-    ocrolib.write_text(base+".txt",pred)
+    output_text = base+".txt"
+    ocrolib.write_text(output_text,pred)
+    output_list.append(output_text)
 
-    return None
+    return output_list
 
 def safe_process(arg):
     trial,fname = arg
