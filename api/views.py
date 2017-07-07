@@ -25,17 +25,7 @@ def recognitionView(request, format=None):
     if request.data.get('image') is None:
         return HttpResponse("Please upload at least one binarized image.")
 
-    # Receive specified parameters values
-    # Receive parameters with model and serializer
-    data_dict = request.data.dict()
-    del data_dict['image']   # Image will be processed seperately for receiving multiple images
-    # Serialize the specified parameters, only containing the specified parameters
-    # If we want to generate the parameters object with all of the default paremeters, call parameters.save()
-    paras_serializer = ParameterSerializer(data=data_dict)
-    if paras_serializer.is_valid():
-        pass # needn't parameters.save(), since we needn't to store these parameters in DB
-
-    # Receive and store uploaded image(s)
+    ### Receive and store uploaded image(s)
     # One or multiple images/values in one field
     imagepaths = []
     images = request.data.getlist('image')
@@ -43,26 +33,51 @@ def recognitionView(request, format=None):
         image_str = str(image)
         imagepaths.append(dataDir+"/"+image_str)
         default_storage.save(dataDir+"/"+image_str, image)
+
+    ### Receive and store uploaded recognizor model specified by the user
+    if request.data.get('model') is not None:
+        model = request.data.get('model')
+        modelpath = dataDir+"/"+str(model)
+        default_storage.save(modelpath, model)
+    
+    ### Receive other parameters set by the user
+    data_dict = request.data.dict()
+    # Image(s) and model will be processed seperately for receiving multiple images and store in local FS
+    del data_dict['image']
+    # Serialize the specified parameters, only containing the specified parameters
+    # If we want to generate the parameters object with all of the default paremeters, call parameters.save()
+    paras_serializer = ParameterSerializer(data=data_dict)
+    if paras_serializer.is_valid():
+        pass # needn't parameters.save(), since we needn't to store these parameters in DB
+    parameters = paras_serializer.data
+    if request.data.get('model') is not None:
+        parameters.update({'model':modelpath})
 	
     # Call OCR recognition function
     #alltext_file = recognition_exec(dataDir)
-    recognition_exec(imagepaths, paras_serializer.data)
+    outputfiles = recognition_exec(imagepaths, parameters)
 
-    # Write all of the line results into a single file
-    results = glob.glob(dataDir+"/*.txt")
-    alltext_file = dataDir + "/recog_output.txt"
-    with open(alltext_file, "wb") as outfile:
-        for result in results:
-            with open(result, "rb") as infile:
-                outfile.write(infile.read())
-                infile.close()
-    outfile.close()
+    # Return the multiple files in zip type
+    # Folder name in ZIP archive which contains the above files
+    zip_dir = "output_recognition"
+    zip_filename = "%s.zip" % zip_dir
+    # Open StringIO to grab in-memory ZIP contents
+    strio = StringIO.StringIO()
+    # The zip compressor
+    zf = zipfile.ZipFile(strio, "w")
 
-    # One file: return directly
-    fdir, fname = os.path.split(alltext_file)
-    short_report = open(alltext_file, 'rb')
-    response = HttpResponse(FileWrapper(short_report), content_type='application/force-download')
-    response['Content-Disposition'] = 'attachment; filename=%s' % fname
+    for fpath in outputfiles:
+        # Caculate path for file in zip
+        fdir, fname = os.path.split(fpath)
+        zip_path = os.path.join(zip_dir, fname)
+        # Add file, at correct path
+        zf.write(fpath, zip_path)
+
+    zf.close()
+    # Grab ZIP file from in-memory, make response with correct MIME-type
+    response = HttpResponse(strio.getvalue(), content_type="application/x-zip-compressed")
+    # And correct content-disposition
+    response["Content-Disposition"] = 'attachment; filename=%s' % zip_filename
 
     # Delete all files related to this service time
     del_service_files(dataDir)
