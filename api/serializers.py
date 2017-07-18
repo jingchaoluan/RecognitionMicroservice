@@ -5,4 +5,4 @@ from api.models import Parameters
 class ParameterSerializer(serializers.ModelSerializer):
 	class Meta:
 		model = Parameters
-		fields = ('id', 'height', 'pad', 'nonormalize', 'llocs', 'probabilities')
+		fields = ('id', 'height', 'pad', 'nonormalize', 'llocs', 'probabilities', 'parallel')
