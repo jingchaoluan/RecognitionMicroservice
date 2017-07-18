@@ -13,3 +13,5 @@ class Parameters(models.Model):
 	nonormalize = models.BooleanField(default=False, help_text="don't normalize the textual output from the recognizer")
 	llocs = models.BooleanField(default=False, help_text="output LSTM locations for characters")
 	probabilities = models.BooleanField(default=False, help_text="output probabilities for each letter")
+	
+	parallel = models.IntegerField(default=1, help_text="number of parallel CPUs to use")
