@@ -22,9 +22,9 @@ dataDir = settings.MEDIA_ROOT
 # The directory of the default model
 modelPath = settings.BASE_DIR + "/models/en-default.pyrnn.gz"
 
-# The default parameters values
-# Users can custom the first 11 parameters
-args = {
+# 'args_default' is a constant dictionary, only store the defalut parameter values.
+# Using its deplicated variable 'args' to store the updated parameter values
+args_default = {
     # line dewarping (usually contained in model)
     'height':-1,        # target line height (overrides recognizer)
 
@@ -35,16 +35,25 @@ args = {
     'llocs':False,      # output LSTM locations for characters
     'probabilities':False,# output probabilities for each letter
 
+    'parallel':1,        # number of parallel CPUs to use
+
     ### The following parameters cannot be overwritten by users
     'nocheck':True,     # disable error checking on images
-    'quiet':False,      # turn off most output
-    'parallel':0        # number of parallel processes to use
+    'quiet':False      # turn off most output
+
 }
 
+# The global variable
+# Users can custom the first 10 parameters as above
+args = {}
 
 # The entry of segmentation service
 # Return the directories, each directory related to a input image and stored the segmented line images  
 def recognition_exec(images, parameters):
+    # Update parameters values customed by user
+    # Each time update the args with the default args dictionary, avoid the effect of the previous update
+    global args
+    args = args_default.copy()
     args.update(parameters)
     print("=====Parameters Values =====")
     print(args)
