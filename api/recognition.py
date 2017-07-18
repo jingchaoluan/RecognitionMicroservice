@@ -38,7 +38,7 @@ args_default = {
     'parallel':1,        # number of parallel CPUs to use
 
     ### The following parameters cannot be overwritten by users
-    'nocheck':True,     # disable error checking on images
+    'nocheck':False,     # disable error checking on images
     'quiet':False      # turn off most output
 
 }
@@ -74,16 +74,19 @@ def recognition_exec(images, parameters):
     if args['parallel']==0:
         for trial,fname in enumerate(images):
             line_output_list = process((trial,fname))
-            output_lists = output_lists + line_output_list
+            if type(line_output_list) is list:
+                output_lists = output_lists + line_output_list
     elif args['parallel']==1:
         for trial,fname in enumerate(images):
             line_output_list = safe_process((trial,fname))
-            output_lists = output_lists + line_output_list
+            if type(line_output_list) is list:
+                output_lists = output_lists + line_output_list
     else:
         pool = Pool(processes=args['parallel'])
         result = pool.imap_unordered(safe_process,enumerate(images))
         for line_output_list in result:
-            output_lists = output_lists + line_output_list
+            if type(line_output_list) is list:
+                output_lists = output_lists + line_output_list
     return output_lists
 
 
