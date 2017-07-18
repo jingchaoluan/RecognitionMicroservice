@@ -26,10 +26,10 @@
             1) The path of the singal-line image(s), uploaded in form style. <br>
             2) Optional. Specified parameter valuses which are listed in the following part, and send them in form style.</p>
         <p>3. Output: </p>
-        <p class="two_tab"> A zip file containing all output files related to original image(s). Usually they are named as {imagename}.txt (, {imagename}.prob, and {imagename}.llocs if related parameters have been set).</p>
+        <p class="two_tab"> A zip file containing all output files related to original image(s). Usually they are named as {<i>imagename</i>}.txt (, {<i>imagename</i>}.prob, and {<i>imagename</i>}.llocs if related parameters have been set).</p>
         <p>4. E.g. curl -F "<font color="red">image</font>=@<i>path_to_image1</i>" -F "<font color="red">image</font>=@<i>path_to_image2</i>" -F "<font color="red">probabilities</font>=True" -o <i>name_of_output_file</i> http://10.5.146.92:8003/recognitionapi</p>
         
-        <h4>PARAMETERS (#5)</h4>
+        <h4>PARAMETERS (#6)</h4>
         <table border="1" cellspacing="0" >
             <tr bgcolor="silver">
                 <th>Parameter</th>
@@ -66,6 +66,12 @@
                 <td>Boolean</td>
                 <td align="center">False</td>
                 <td>output probabilities for each letter</td>
+            </tr>
+            <tr>
+                <td>parallel</td>
+                <td>Integer</td>
+                <td align="center">0</td>
+                <td>number of parallel CPUs to use</td>
             </tr>
         </table>
 
