@@ -1,1 +1,0 @@
-This test file used to test building repo according to specific branch and commit
